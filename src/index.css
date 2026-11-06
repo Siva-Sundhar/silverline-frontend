@@ -1,0 +1,69 @@
+@import 'tailwindcss';
+
+/* Scrollbar size */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 4px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: linear-gradient(
+    to bottom,
+    #f1f5f9,
+    #e2e8f0
+  );
+  border-radius: 10px;
+}
+
+/* Scrollbar thumb */
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    #065f46,
+    #10b981,
+    #065f46
+  );
+  border-radius: 10px;
+  border: 1px solid #ddd;
+}
+
+/* Hover effect */
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    to top,
+    #10b981,
+    #065f46,
+    #10b981
+  );
+}
+
+/* Scrollbar buttons */
+/* ::-webkit-scrollbar-button {
+  background: linear-gradient(
+    to bottom,
+    #93c5fd,
+    #6366f1
+  );
+} */
+
+/* Up arrow */
+/* ::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background:  #ddd;
+} */
+
+/* Down arrow */
+/* ::-webkit-scrollbar-button:single-button:vertical:increment {
+  background: blue;
+} */
+
+/* Left arrow */
+/* ::-webkit-scrollbar-button:single-button:horizontal:decrement {
+  background: yellow;
+} */
+
+/* Right arrow */
+/* ::-webkit-scrollbar-button:single-button:horizontal:increment {
+  background: green;
+} */
+
