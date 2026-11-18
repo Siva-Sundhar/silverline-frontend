@@ -38,14 +38,22 @@ const GenericSelect = forwardRef(function GenericSelect(
 	const inputRef = useRef(null);
 	const listRef = useRef(null);
 
-	// Expose focus/blur methods to parent
+	// Expose focus/blur/ select methods to parent
 	useImperativeHandle(ref, () => ({
 		focus: () => {
 			openMenu();
 			inputRef.current?.focus({ preventScroll: true });
 		},
-		blur: () => inputRef.current?.blur(),
-		input: inputRef.current,
+
+		blur: () => {
+			inputRef.current?.blur();
+		},
+
+		select: () => inputRef.current?.select(),
+
+		get input() {
+			return inputRef.current;
+		},
 	}));
 
 	const getOptionLabel = (option) => {
@@ -71,8 +79,8 @@ const GenericSelect = forwardRef(function GenericSelect(
 		const searchableValues = [
 			getOptionLabel(option),
 			getOptionValue(option),
-			product.partNo,
-			product.itemName,
+			product.itemCode,
+			product.productDescription,
 		];
 
 		return searchableValues

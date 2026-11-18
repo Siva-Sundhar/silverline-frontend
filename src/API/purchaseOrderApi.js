@@ -23,6 +23,21 @@ export const getList = async (path) => {
     }
 };
 
+
+// Voucher Number preview
+
+export const getVoucherNoPreview = async (prefix)=>{
+    try {
+        const response = await api.get(`/api/v1/sequence/preview/${prefix}`);
+
+        return response.data;
+    }
+    catch(error) {
+        console.error("Failed to Fetch Voucehr Number", error)
+    }
+}
+
+
 // const 
 
 // Get a purchase order by ID

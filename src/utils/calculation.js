@@ -301,6 +301,9 @@ export const buildPurchasePayload = (formData, purchaseItem, expenses) => {
     );
   });
 
+  
+  
+
   const purchaseItems = validRows.map((row, index) => {
     const calculated = calculatePurchaseRow(row, mode);
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { getCountryInfo } from '../utils/countryCurrency';
+import { getCountryInfo } from '../utils/countryCurrency.js';
 
 const initialState = {
 	token: null,
@@ -14,7 +14,8 @@ const initialState = {
 	taxMode: null,
 	taxType: null,
 	customers: [],
-	items: [],
+	products: [],
+	productsLoaded: false,
 	purchases: [],
 	loading: false,
 	error: null,
@@ -52,8 +53,8 @@ export const useAppStore = create(
 				set({ customers });
 			},
 
-			setItems: (items) => {
-				set({ items });
+			setProducts: (items) => {
+				set({ items, productsLoaded: true });
 			},
 
 			setPurchases: (purchases) => {

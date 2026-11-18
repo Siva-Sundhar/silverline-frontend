@@ -10,11 +10,14 @@ import {
 	Plus,
 	Package,
 	Users,
+	LogInIcon,
 } from 'lucide-react';
-import { getList } from '../../API/purchaseOrderApi';
-import { formatGenericDate } from '../../utils/FormatGenericDate';
+import { getList } from '../../API/purchaseOrderApi.js';
+import { formatGenericDate } from '../../utils/FormatGenericDate.js';
 // import { useAuthStore } from '../../store/authStore'; // fix this path to your store
-import { normalize, buildStats, formatMoney } from '../../utils/dashboardUtils';
+import { normalize, buildStats, formatMoney } from '../../utils/dashboardUtils.js';
+import useProducts from '../../hooks/useProducts.js';
+import { useAppStore } from '../../store/useAppStore.js';
 
 // One config drives the fetch, the banner buttons, the KPI cards and the badges
 const DOC_TYPES = {
@@ -108,12 +111,23 @@ export const Dashboard = ({ settings }) => {
 	const navigate = useNavigate();
 	const currencySymbol = '$'; //useAuthStore((s) => s.currencySymbol) || '';
 	const money = (n) => formatMoney(n, currencySymbol);
+	const logout = useAppStore((state)=> state.logout)
 
 	const [stats, setStats] = useState(() => buildStats(EMPTY_DOCS));
 	const [failed, setFailed] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState('ALL'); // ALL | PO | SO | PI
 
+	const { fetchProducts } = useProducts();
+	useEffect(() => {
+		fetchProducts().catch(console.error);
+	}, [fetchProducts]);
+
+
+	const handleLogout = () => {
+    logout(); // Clear token and user details from Zustand
+    navigate('/login', { replace: true });
+};
 	useEffect(() => {
 		let active = true;
 
@@ -126,7 +140,8 @@ export const Dashboard = ({ settings }) => {
 			const docs = { ...EMPTY_DOCS };
 			const failedTypes = [];
 			results.forEach((r, i) => {
-				if (r.status === 'fulfilled') docs[types[i]] = normalize(r.value, types[i]);
+				if (r.status === 'fulfilled')
+					docs[types[i]] = normalize(r.value, types[i]);
 				else failedTypes.push(types[i]);
 			});
 
@@ -154,7 +169,7 @@ export const Dashboard = ({ settings }) => {
 		<div className="space-y-6">
 			{/* Banner */}
 			<div className="bg-linear-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-2  shadow-md border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-6  ">
-				<div className="flex items-center gap-4">
+				<div className="flex items-center gap-4 ">
 					<div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">
 						SLV
 					</div>
@@ -166,6 +181,15 @@ export const Dashboard = ({ settings }) => {
 							{settings?.tagline || 'Driving excellence, delivering trust'}
 						</p>
 					</div>
+
+					<button
+						type="button"
+						onClick={handleLogout}
+						className="rounded p-2 hover:bg-white/15 hover:text-red-300 outline-none transition-colors duration-200 cursor-pointer"
+						title="Logout"
+					>
+						<LogInIcon size={20} />
+					</button>
 				</div>
 
 				<div className="flex flex-wrap items-center gap-3">
@@ -190,7 +214,7 @@ export const Dashboard = ({ settings }) => {
 			)}
 
 			{/* KPI cards */}
-			<div className="grid grid-cols-2  lg:grid-cols-4 gap-4">
+			<div className="grid grid-cols-2 p-2 lg:grid-cols-4 gap-4">
 				{Object.entries(DOC_TYPES).map(([type, meta]) => (
 					<StatCard
 						key={type}
@@ -218,14 +242,34 @@ export const Dashboard = ({ settings }) => {
 			</div>
 
 			{/* Secondary metrics */}
-			<div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-				<MiniStat label="Today's PO's" value={stats.PO.today} icon={Clock} color="bg-blue-100 text-blue-800" />
-				<MiniStat label="Today's SO's" value={stats.SO.today} icon={Clock} color="bg-emerald-100 text-emerald-800" />
-				<MiniStat label="Open Orders (PO + SO)" value={stats.PO.open + stats.SO.open} icon={Package} color="bg-amber-100 text-amber-800" />
-				<MiniStat label="Converted This Month" value={stats.convertedThisMonth} icon={CheckCircle2} color="bg-indigo-100 text-indigo-800" />
+			<div className="grid grid-cols-2 p-2 sm:grid-cols-4 gap-4">
+				<MiniStat
+					label="Today's PO's"
+					value={stats.PO.today}
+					icon={Clock}
+					color="bg-blue-100 text-blue-800"
+				/>
+				<MiniStat
+					label="Today's SO's"
+					value={stats.SO.today}
+					icon={Clock}
+					color="bg-emerald-100 text-emerald-800"
+				/>
+				<MiniStat
+					label="Open Orders (PO + SO)"
+					value={stats.PO.open + stats.SO.open}
+					icon={Package}
+					color="bg-amber-100 text-amber-800"
+				/>
+				<MiniStat
+					label="Converted This Month"
+					value={stats.convertedThisMonth}
+					icon={CheckCircle2}
+					color="bg-indigo-100 text-indigo-800"
+				/>
 			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<div className="grid grid-cols-1 p-2 lg:grid-cols-3 gap-6">
 				{/* Top parties */}
 				<div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
 					<h2 className="font-extrabold text-slate-900 text-sm flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -236,10 +280,15 @@ export const Dashboard = ({ settings }) => {
 					<div className="mt-4 space-y-3">
 						{stats.topParties.length > 0 ? (
 							stats.topParties.map((p) => (
-								<div key={`${p.type}-${p.name}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+								<div
+									key={`${p.type}-${p.name}`}
+									className="p-3 bg-slate-50 rounded-lg border border-slate-100"
+								>
 									<div className="flex justify-between font-bold text-xs text-slate-800">
 										<span className="truncate pr-2">{p.name}</span>
-										<span className="text-blue-900 shrink-0">{money(p.value)}</span>
+										<span className="text-blue-900 shrink-0">
+											{money(p.value)}
+										</span>
 									</div>
 									<div className="flex justify-between text-[11px] text-slate-500 mt-1">
 										<span>{p.type}</span>
@@ -295,18 +344,33 @@ export const Dashboard = ({ settings }) => {
 							<tbody className="divide-y divide-slate-100">
 								{recentDocs.length > 0 ? (
 									recentDocs.map((d) => (
-										<tr key={`${d.docType}-${d.id}`} className="hover:bg-slate-50">
+										<tr
+											key={`${d.docType}-${d.id}`}
+											className="hover:bg-slate-50"
+										>
 											<td className="py-2.5 px-2">
-												<span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${DOC_TYPES[d.docType].badge}`}>
+												<span
+													className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${DOC_TYPES[d.docType].badge}`}
+												>
 													{d.docType}
 												</span>
 											</td>
-											<td className="py-2.5 px-2 font-black text-blue-900">{d.number}</td>
-											<td className="py-2.5 px-2 text-slate-500">{formatGenericDate(d.date)}</td>
-											<td className="py-2.5 px-2 truncate max-w-[150px]">{d.party}</td>
-											<td className="py-2.5 px-2 text-right font-black text-slate-900">{money(d.amount)}</td>
+											<td className="py-2.5 px-2 font-black text-blue-900">
+												{d.number}
+											</td>
+											<td className="py-2.5 px-2 text-slate-500">
+												{formatGenericDate(d.date)}
+											</td>
+											<td className="py-2.5 px-2 truncate max-w-[150px]">
+												{d.party}
+											</td>
+											<td className="py-2.5 px-2 text-right font-black text-slate-900">
+												{money(d.amount)}
+											</td>
 											<td className="py-2.5 px-2 text-center">
-												<span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${STATUS_STYLE[d.status] || 'bg-slate-100 text-slate-700'}`}>
+												<span
+													className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${STATUS_STYLE[d.status] || 'bg-slate-100 text-slate-700'}`}
+												>
 													{d.status || '-'}
 												</span>
 											</td>
@@ -315,7 +379,9 @@ export const Dashboard = ({ settings }) => {
 								) : (
 									<tr>
 										<td colSpan="6" className="py-8 text-center text-slate-400">
-											{loading ? 'Loading...' : 'No recent documents available.'}
+											{loading
+												? 'Loading...'
+												: 'No recent documents available.'}
 										</td>
 									</tr>
 								)}

@@ -11,15 +11,8 @@ import {
 } from '../../utils/FormatGenericDate.js';
 
 import GenericSelect from '../../utils/components/GenericSelect.jsx';
-import products from '../../utils/test_master/item.js';
-import ledgers from '../../utils/test_master/ledger.js';
 
-import {
-	buildPurchasePayload,
-	calculateExpenses,
-	calculatePurchaseRow,
-	calculatePurchaseTotals,
-} from '../../utils/calculation.js';
+import ledgers from '../../utils/test_master/ledger.js';
 
 // import { useAppStore } from '../../store/useAppStore.js';
 import { toast } from 'sonner';
@@ -30,12 +23,21 @@ import {
 	formatPercent,
 	unformatNumber,
 } from '../../utils/FormatNumber.js';
-import customers from '../../utils/test_master/customers.js';
+// import customers from '../../utils/test_master/customers.js';
 import { companyAddress } from '../../utils/companyAddress.js';
 import { supplierAddress } from '../../utils/supplier.js';
 import { getVoucherKey } from '../../utils/voucherNumberGenerator.js';
-import { createPurchaseOrder } from '../../API/purchaseOrderApi.js';
+import {
+	createPurchaseOrder,
+	getVoucherNoPreview,
+} from '../../API/purchaseOrderApi.js';
 import PurchasePrint from '../print/PurchasePrint.jsx';
+import PurchaseOrderBatchSubform from './PurchaseBatchSubform.jsx';
+import useProducts from '../../hooks/useProducts.js';
+import { calculateVoucherTotals } from '../../utils/calculations/voucher/voucherTotals.js';
+import { calculateItemRow } from '../../utils/calculations/common/itemCalculations.js';
+import { buildPurchaseOrderPayload } from '../../utils/calculations/payload/purchaseOrderPayload.js';
+import { calculateExpenses } from '../../utils/calculations/index.js';
 
 const headerInput =
 	'h-5 border border-amber-300 bg-[#fee8af] px-1 text-slate-900 outline-none focus:border-blue-500 focus:bg-white';
@@ -53,7 +55,7 @@ const EXPENSE_FIELDS = ['particular', 'amount', 'tax'];
 
 const FORMATTED_EXPENSE_FIELDS = new Set(['amount', 'tax']);
 
-const createEmptyPurchaseRow = (tax = '') => ({
+const createEmptyPurchaseRow = (tax = '7') => ({
 	id: crypto.randomUUID(),
 	code: '',
 	desc: '',
@@ -62,6 +64,17 @@ const createEmptyPurchaseRow = (tax = '') => ({
 	rate: '',
 	disc: '',
 	tax,
+	batchItems: [createEmptyBatchRow()],
+});
+
+const createEmptyBatchRow = () => ({
+	id: crypto.randomUUID(),
+	color: '',
+	doorType: '',
+	seatType: '',
+	quantity: '',
+	uom: '',
+	rate: '',
 });
 
 const createExpenseRow = () => ({
@@ -91,8 +104,8 @@ const normalizePurchase = (response, taxModeStore, taxTypeStore) => {
 	const expenseEntries = (data.requestLedgerEntry ?? [])
 		.filter(
 			(entry) =>
-				String(entry.ledType || '').toUpperCase() === 'EXPENSE' ||
-				String(entry.ledType || '').toUpperCase() === 'EXPENSES',
+				String(entry.ledgerType || '').toUpperCase() === 'EXPENSE' ||
+				String(entry.ledgerType || '').toUpperCase() === 'EXPENSES',
 		)
 		.map(normalizeExpense);
 
@@ -157,12 +170,14 @@ const PurchaseOrder = ({ orderId }) => {
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 
+	const { items } = useProducts();
+
 	/* comes from store  */
 	const supplier = ''; //useAppStore((s) => s.ledgerName);
 	const taxModeStore = ''; //useAppStore((s) => s.taxMode);
 	const taxTypeStore = ''; //useAppStore((s) => s.taxType);
-	const localeISO = 'en-IN'; //useAppStore((s) => s.locale);
-	const currency = 'INR'; //useAppStore((s) => s.currency);
+	const localeISO = 'en-US'; //useAppStore((s) => s.locale);
+	const currency = 'USD'; //useAppStore((s) => s.currency);
 	const symbol = '$'; //useAppStore((s) => s.currencySymbol);
 	// const role = useAppStore((state) => state.role);
 
@@ -182,7 +197,7 @@ const PurchaseOrder = ({ orderId }) => {
 		voucherStatus: '',
 		tallyStatus: '',
 		paymentStatus: '',
-		taxMode: taxModeStore || 'gst',
+		taxMode: taxModeStore || 'vat',
 		taxType: taxTypeStore || 'inter',
 		autoRound: true,
 		totalAmount: '',
@@ -198,19 +213,9 @@ const PurchaseOrder = ({ orderId }) => {
 
 	const [expenses, setExpenses] = useState([createExpenseRow()]);
 
-	// const [focusedIndex, setFocusedIndex] = useState(0);
-
 	const [dateInputText, setDateInputText] = useState(
 		formatGenericDate(new Date(), 'DD-MMM-YY'),
 	);
-
-	const [refDateInputText, setRefDateInputText] = useState('');
-
-	const [attachments, setAttachments] = useState([]);
-
-	const [attachmentPreviews, setAttachmentPreviews] = useState([]);
-
-	const [previewFile, setPreviewFile] = useState(null);
 
 	const [showPreview, setShowPreview] = useState(false);
 	const [focusedCell, setFocusedCell] = useState(null);
@@ -219,6 +224,7 @@ const PurchaseOrder = ({ orderId }) => {
 	const [customerInfo, setCustomerInfo] = useState(false);
 	const [supplierInfo, setSupplierInfo] = useState(false);
 	const [openView, setOpenView] = useState('expenses');
+	const [activeBatchRow, setActiveBatchRow] = useState(null);
 
 	const headerRefs = useRef([]);
 	const hiddenDateRef = useRef(null);
@@ -229,18 +235,17 @@ const PurchaseOrder = ({ orderId }) => {
 	const distInfoRef = useRef(null);
 	const suppInfoRef = useRef(null);
 	const bottomRef = useRef(null);
-	const scrollRef = useRef(null);
 
 	// const fileInputRef = useRef(null);
 	const MAX_EXP_ROWS = 5;
 
 	const productOptions = useMemo(() => {
-		return products.map((product) => ({
-			label: product.partNo,
-			value: product.partNo,
+		return items.map((product) => ({
+			label: product.itemCode,
+			value: product.itemCode,
 			product,
 		}));
-	}, []);
+	}, [items]);
 
 	const ledgerOptions = useMemo(() => {
 		return ledgers.map((ledger) => ({
@@ -249,12 +254,12 @@ const PurchaseOrder = ({ orderId }) => {
 		}));
 	}, []);
 
-	const customerOptions = useMemo(() => {
-		return customers.map((ledger) => ({
-			label: ledger.customerName,
-			value: ledger.customerName,
-		}));
-	}, []);
+	// const customerOptions = useMemo(() => {
+	// 	return customers.map((ledger) => ({
+	// 		label: ledger.customerName,
+	// 		value: ledger.customerName,
+	// 	}));
+	// }, []);
 
 	useEffect(() => {
 		if (customerInfo) {
@@ -310,20 +315,17 @@ const PurchaseOrder = ({ orderId }) => {
 						: [createExpenseRow()],
 				);
 
-				// setAttachments(normalized.files.map((item) => item.file));
-				// setAttachmentPreviews(normalized.files);
-
 				setDateInputText(
 					normalized.form.voucherDate
 						? formatGenericDate(normalized.form.voucherDate, 'DD-MMM-YY')
 						: '',
 				);
 
-				setRefDateInputText(
-					normalized.form.referenceDate
-						? formatGenericDate(normalized.form.referenceDate, 'DD-MMM-YY')
-						: '',
-				);
+				// setRefDateInputText(
+				// 	normalized.form.referenceDate
+				// 		? formatGenericDate(normalized.form.referenceDate, 'DD-MMM-YY')
+				// 		: '',
+				// );
 			} catch (error) {
 				console.error('Failed to load purchase:', error);
 			} finally {
@@ -340,14 +342,6 @@ const PurchaseOrder = ({ orderId }) => {
 		};
 	}, [alterId, taxModeStore, taxTypeStore]);
 
-	// useEffect(() => {
-	// 	return () => {
-	// 		attachmentPreviews.forEach((attachment) => {
-	// 			URL.revokeObjectURL(attachment.previewUrl);
-	// 		});
-	// 	};
-	// }, [attachmentPreviews]);
-
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			headerRefs.current[0]?.focus();
@@ -360,14 +354,18 @@ const PurchaseOrder = ({ orderId }) => {
 	useEffect(() => {
 		if (alterId) return;
 
-		const timer = setTimeout(() => {
-			const data = getVoucherKey('PO');
+		const timer = setTimeout(async () => {
+			try {
+				const data = await getVoucherNoPreview('PO');
 
-			if (data) {
-				setFormData((prev) => ({
-					...prev,
-					voucherNo: `${data.prefix}/${String(data.lastNumber).padStart(3, '0')}/${data.financialYear}`,
-				}));
+				if (data) {
+					setFormData((prev) => ({
+						...prev,
+						voucherNo: data,
+					}));
+				}
+			} catch (error) {
+				console.error(error);
 			}
 		}, 0);
 
@@ -393,13 +391,13 @@ const PurchaseOrder = ({ orderId }) => {
 				);
 			}
 
-			if (field === 'referenceDate') {
-				setRefDateInputText(
-					formData.referenceDate
-						? formatGenericDate(formData.referenceDate, 'DD-MMM-YY')
-						: '',
-				);
-			}
+			// if (field === 'referenceDate') {
+			// 	setRefDateInputText(
+			// 		formData.referenceDate
+			// 			? formatGenericDate(formData.referenceDate, 'DD-MMM-YY')
+			// 			: '',
+			// 	);
+			// }
 
 			return;
 		}
@@ -415,9 +413,9 @@ const PurchaseOrder = ({ orderId }) => {
 			setDateInputText(formattedDate);
 		}
 
-		if (field === 'referenceDate') {
-			setRefDateInputText(formattedDate);
-		}
+		// if (field === 'referenceDate') {
+		// 	setRefDateInputText(formattedDate);
+		// }
 	};
 
 	const handleHeaderKeyDown = (event, nextElement) => {
@@ -560,12 +558,12 @@ const PurchaseOrder = ({ orderId }) => {
 		setTimeout(() => {
 			if (rowIndex < purchaseItem.length - 1) {
 				gridRefs.current[`${rowIndex}-0`]?.focus();
+
 				return;
 			}
 
 			if (rowIndex > 0) {
 				setOpen(true);
-				setOpenView('expenses');
 				setTimeout(() => {
 					expenseRefs.current[`0-particular`]?.focus();
 				}, 0);
@@ -674,9 +672,7 @@ const PurchaseOrder = ({ orderId }) => {
 			return;
 		}
 
-		
 		setShowPreview(true);
-
 	};
 
 	useEffect(() => {
@@ -688,56 +684,9 @@ const PurchaseOrder = ({ orderId }) => {
 		return currencyFormatter(value, localeISO, currency, symbol);
 	};
 
-	// const handleFiles = (event) => {
-	// 	const selectedFiles = Array.from(event.target.files || []);
-
-	// 	// User clicked Cancel
-	// 	if (selectedFiles.length === 0) {
-	// 		return;
-	// 	}
-
-	// 	const newPreviews = selectedFiles.map((file, index) => ({
-	// 		id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
-	// 		file,
-	// 		name: file.name,
-	// 		size: file.size,
-	// 		type: file.type,
-	// 		previewUrl: URL.createObjectURL(file),
-	// 	}));
-
-	// 	setAttachmentPreviews((previous) => [...previous, ...newPreviews]);
-
-	// 	setAttachments((previous) => [...previous, ...selectedFiles]);
-
-	// 	// Allows selecting the same file again later
-	// 	event.target.value = '';
-	// };
-
-	// const removeAttachment = (attachmentId) => {
-	// 	const selected = attachmentPreviews.find(
-	// 		(attachment) => attachment.id === attachmentId,
-	// 	);
-
-	// 	if (selected?.previewUrl) {
-	// 		URL.revokeObjectURL(selected.previewUrl);
-	// 	}
-
-	// 	const remaining = attachmentPreviews.filter(
-	// 		(attachment) => attachment.id !== attachmentId,
-	// 	);
-
-	// 	setAttachmentPreviews(remaining);
-
-	// 	setAttachments(remaining.map((attachment) => attachment.file));
-
-	// 	if (previewFile?.id === attachmentId) {
-	// 		setPreviewFile(null);
-	// 	}
-	// };
-
 	const totals = useMemo(() => {
-		return calculatePurchaseTotals({
-			purchaseItems: purchaseItem,
+		return calculateVoucherTotals({
+			items: purchaseItem,
 			expenses,
 			taxMode: formData.taxMode,
 			taxType: formData.taxType,
@@ -796,15 +745,15 @@ const PurchaseOrder = ({ orderId }) => {
 	};
 
 	/* Reusable Function  */
-	const isValidNumber = (value) => {
-		return (
-			value !== '' &&
-			value !== null &&
-			value !== undefined &&
-			Number.isFinite(Number(value)) &&
-			Number(value) > 0
-		);
-	};
+	// const isValidNumber = (value) => {
+	// 	return (
+	// 		value !== '' &&
+	// 		value !== null &&
+	// 		value !== undefined &&
+	// 		Number.isFinite(Number(value)) &&
+	// 		Number(value) > 0
+	// 	);
+	// };
 
 	const focusElement = (element) => {
 		if (!element) return;
@@ -835,23 +784,23 @@ const PurchaseOrder = ({ orderId }) => {
 				return false;
 			}
 
-			if (!isValidNumber(row.qty)) {
-				toast.error(`Quantity is required in row ${index + 1}.`);
-				focusElement(gridRefs.current[`${index}-1`]);
-				return false;
-			}
+			// if (!isValidNumber(row.qty)) {
+			// 	toast.error(`Quantity is required in row ${index + 1}.`);
+			// 	focusElement(gridRefs.current[`${index}-1`]);
+			// 	return false;
+			// }
 
-			if (!isValidNumber(row.rate)) {
-				toast.error(`Amount/rate is required in row ${index + 1}.`);
-				focusElement(gridRefs.current[`${index}-2`]);
-				return false;
-			}
+			// if (!isValidNumber(row.rate)) {
+			// 	toast.error(`Amount/rate is required in row ${index + 1}.`);
+			// 	focusElement(gridRefs.current[`${index}-2`]);
+			// 	return false;
+			// }
 
-			if (!isValidNumber(row.tax)) {
-				toast.error(`Tax is required in row ${index + 1}.`);
-				focusElement(gridRefs.current[`${index}-4`]);
-				return false;
-			}
+			// if (!isValidNumber(row.tax)) {
+			// 	toast.error(`Tax is required in row ${index + 1}.`);
+			// 	focusElement(gridRefs.current[`${index}-4`]);
+			// 	return false;
+			// }
 		}
 
 		return true;
@@ -881,15 +830,9 @@ const PurchaseOrder = ({ orderId }) => {
 		});
 
 		setDateInputText(formatGenericDate(new Date(), 'DD-MMM-YY'));
-		setRefDateInputText('');
 
 		setPurchaseItem([createEmptyPurchaseRow()]);
 		setExpenses([createExpenseRow()]);
-
-		setAttachments([]);
-		setAttachmentPreviews([]);
-		setPreviewFile(null);
-		setShowPreview(false);
 
 		setFocusedCell(null);
 		setFocusedExpenseCell(null);
@@ -909,22 +852,21 @@ const PurchaseOrder = ({ orderId }) => {
 		const voucherStatus = isAdmin && approve ? 'Approved' : 'Pending';
 
 		const tallyStatus = 'Pending';
-		
 
 		// console.log(formData);
 
 		try {
 			setSaving(true);
 
-			const voucherData = buildPurchasePayload(
-				{ ...formData, voucherStatus, tallyStatus,  },
+			const voucherData = buildPurchaseOrderPayload(
+				{ ...formData, voucherStatus, tallyStatus },
 				purchaseItem,
 				expenses,
 			);
 
 			console.log(voucherData);
 
-			await createPurchaseOrder(voucherData);
+			// await createPurchaseOrder(voucherData);
 
 			toast.success(
 				isAlterMode
@@ -960,7 +902,6 @@ const PurchaseOrder = ({ orderId }) => {
 		}
 	};
 
-	const previewData = normalizePurchase({formData, purchaseItem, expenses}); // Replace with the actual data
 	const productOptionsWithEnd = useMemo(
 		() => [
 			{
@@ -996,14 +937,14 @@ const PurchaseOrder = ({ orderId }) => {
 		const product = option.product;
 
 		return (
-			<div className="grid grid-cols-[60px_minmax(0,1fr)_50px_85px] items-center gap-2 px-2">
-				<span className="font-semibold">{product.partNo}</span>
+			<div className="grid grid-cols-[100px_minmax(0,1fr)_50px_85px] items-center gap-2 px-2">
+				<span className="font-semibold">{product.itemCode}</span>
 
-				<span className="truncate">{product.itemName}</span>
+				<span className="truncate">{product.productDescription}</span>
 
 				<span className="text-center font-medium">{product.uom}</span>
 				{/* <span className="text-right font-medium">{currencyFormatter(product.rate)}</span> */}
-				<span className="text-right font-medium">{`${product.taxRate} %`}</span>
+				{/* <span className="text-right font-medium">{`${product.taxRate} %`}</span> */}
 			</div>
 		);
 	};
@@ -1029,8 +970,8 @@ const PurchaseOrder = ({ orderId }) => {
 								(option) => String(option.value) === String(currentItem.code),
 							) || null
 						}
-						onKeyDown={(event) => {
-							handleGridKeyDown(event, rowIndex, 0);
+						onKeyDown={(e) => {
+							handleGridKeyDown(e, rowIndex, 0);
 						}}
 						onChange={(selectedOption) => {
 							if (!selectedOption) {
@@ -1053,23 +994,28 @@ const PurchaseOrder = ({ orderId }) => {
 									index === rowIndex
 										? {
 												...row,
-												code: product.partNo,
-												desc: product.itemName,
+												code: product.itemCode,
+												desc: product.productDescription,
 												uom: product.uom,
-												tax: product.taxRate || product.vat || '',
 											}
 										: row,
 								),
 							);
+
+							// Open batch form after selecting product
+							// if (product.batchOption) {
+							// 	setActiveBatchRow(rowIndex);
+							// }
+							setActiveBatchRow(rowIndex);
 						}}
 						onSelect={(selectedOption) => {
 							if (selectedOption?.isEndOfList) {
 								return;
 							}
 
-							setTimeout(() => {
-								gridRefs.current[`${rowIndex}-1`]?.focus();
-							}, 0);
+							// setTimeout(() => {
+							// 	gridRefs.current[`${rowIndex}-1`]?.focus();
+							// }, 0);
 						}}
 						labelKey="label"
 						valueKey="value"
@@ -1081,12 +1027,12 @@ const PurchaseOrder = ({ orderId }) => {
 							maxWidth: 'calc(100vw - 8px)',
 						}}
 						menuHeader={
-							<div className="grid grid-cols-[60px_minmax(0,1fr)_55px_85px] gap-2 ">
+							<div className="grid grid-cols-[100px_minmax(0,1fr)_55px_85px] gap-2 ">
 								<span>Code</span>
 								<span>Product Name</span>
 								<span className="text-center">UOM</span>
 								{/* <span className="text-right pr-1.5">Rate</span> */}
-								<span className="text-right">Tax (%)</span>
+								{/* <span className="text-right">Tax (%)</span> */}
 							</div>
 						}
 						renderOption={renderProductOption}
@@ -1239,7 +1185,7 @@ const PurchaseOrder = ({ orderId }) => {
 				{/* Amount */}
 				<td className="border border-slate-300 bg-slate-50 px-1.5 text-right font-bold tabular-nums">
 					{currencyFormatter(
-						calculatePurchaseRow(currentItem, taxMode).taxable,
+						calculateItemRow(currentItem, taxMode).taxable,
 						localeISO,
 						currency,
 						symbol,
@@ -1428,12 +1374,63 @@ const PurchaseOrder = ({ orderId }) => {
 		);
 	};
 
+	//!   Batch Subform Handlers
+	const activePurchaseItem =
+		activeBatchRow !== null ? purchaseItem[activeBatchRow] : null;
+
+	const selectedProduct = activePurchaseItem
+		? items.find(
+				(product) => product.itemCode === purchaseItem[activeBatchRow]?.code,
+			)
+		: null;
+
+	const handleBatchSave = ({ batchItems, totalQty, totalAmount }) => {
+		setPurchaseItem((prev) =>
+			prev.map((row, index) =>
+				index === activeBatchRow
+					? {
+							...row,
+							batchItems,
+							qty: totalQty,
+							uom: selectedProduct?.uom || row.uom,
+							amount: totalAmount,
+						}
+					: row,
+			),
+		);
+
+		closeBatchForm();
+	};
+
+	const handleBatchChange = (updatedBatches) => {
+		setPurchaseItem((prev) =>
+			prev.map((item, index) =>
+				index === activeBatchRow
+					? {
+							...item,
+							batchItems: updatedBatches,
+						}
+					: item,
+			),
+		);
+	};
+
+	const closeBatchForm = () => {
+		const rowIndex = activeBatchRow;
+
+		setActiveBatchRow(null);
+
+		requestAnimationFrame(() => {
+			focusAndSelect(rowIndex, 2);
+		});
+	};
+
 	return (
 		<>
 			{loading && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
 					<div className="rounded bg-white px-6 py-3 font-semibold shadow-lg">
-						Loading purchase...
+						Loading purchase order...
 					</div>
 				</div>
 			)}
@@ -1542,7 +1539,7 @@ const PurchaseOrder = ({ orderId }) => {
 							</button>
 
 							<PurchasePrint
-								data={{formData, purchaseItem, expenses}}
+								data={{ formData, purchaseItem, expenses }}
 								isOpen={showPreview}
 								onClose={() => setShowPreview(false)}
 							/>
@@ -2327,26 +2324,6 @@ const PurchaseOrder = ({ orderId }) => {
 					</main>
 
 					{/* ============ COLLAPSE BUTTON ============ */}
-					{/* <button
-						type="button"
-						tabIndex={-1}
-						onClick={() => {
-							setIsLast((v) => !v);
-						}}
-						aria-expanded={isLast}
-						className="flex h-4.5 shrink-0 items-center justify-between border-t border-slate-400 bg-slate-200 px-2 text-[12px] font-semibold text-slate-700 outline-none focus:bg-amber-200 hover:bg-slate-300"
-					>
-						<span className="flex items-center gap-1">Tax Breakup</span>
-						{isLast ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-						<span className="tabular-nums">
-							Grand Total:{' '}
-							<b className="text-slate-900">
-								{currencyFormatter(totals.net, localeISO, currency, symbol)}
-							</b>
-						</span>
-					</button> */}
-
-					{/* ============ GST & SUMMARY ============ */}
 
 					{/* LEFT - GST Slabs */}
 
@@ -2447,53 +2424,6 @@ const PurchaseOrder = ({ orderId }) => {
 						</div>
 
 						<div className="flex items-center gap-2">
-							{/* <input
-								ref={fileInputRef}
-								type="file"
-								multiple
-								accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-								onChange={handleFiles}
-								className="hidden"
-							/>
-
-							<button
-								type="button"
-								onClick={() => {
-									fileInputRef.current?.click();
-								}}
-								className="flex h-5 items-center gap-1 rounded border border-blue-400 bg-blue-50 px-2 font-semibold text-blue-800"
-							>
-								<Paperclip size={12} />
-								Attach File
-								{attachments.length > 0 && (
-									<span className="rounded-full bg-blue-800 px-1.5 text-[10px] text-white">
-										{attachments.length}
-									</span>
-								)}
-							</button>
-
-							{attachmentPreviews.length > 0 && (
-								<button
-									type="button"
-									onClick={() => {
-										setShowPreview((current) => !current);
-									}}
-									className="flex h-5 items-center gap-1 rounded border border-blue-400 bg-blue-50 px-2 font-semibold text-blue-800"
-								>
-									{showPreview ? (
-										<>
-											<EyeOff size={12} />
-											Hide
-										</>
-									) : (
-										<>
-											<Eye size={12} />
-											View
-										</>
-									)}
-								</button>
-							)} */}
-
 							{isAdmin ? (
 								''
 							) : (
@@ -2553,148 +2483,19 @@ const PurchaseOrder = ({ orderId }) => {
 							)}
 						</div>
 					</footer>
-
-					{/* 
-					{showPreview && attachmentPreviews.length > 0 && (
-						<section className="shrink-0 border-t border-slate-300 bg-slate-50 px-2 py-1">
-							<div className="mb-1 text-xs font-bold text-slate-700">
-								Attached Documents
-							</div>
-
-							<div className="flex flex-wrap gap-2">
-								{attachmentPreviews.map((attachment) => {
-									const isImage = attachment.type.startsWith('image/');
-
-									const isPdf = attachment.type === 'application/pdf';
-
-									return (
-										<div
-											key={attachment.id}
-											className="flex w-60 items-center gap-2 border border-slate-300 bg-white p-1 shadow-sm"
-										>
-											{isImage ? (
-												<img
-													src={attachment.previewUrl}
-													alt={attachment.name}
-													className="h-10 w-10 object-cover"
-												/>
-											) : isPdf ? (
-												<div className="flex h-10 w-10 items-center justify-center bg-red-100 text-xs font-bold text-red-700">
-													PDF
-												</div>
-											) : (
-												<div className="flex h-10 w-10 items-center justify-center bg-blue-100 text-xs font-bold text-blue-700">
-													DOC
-												</div>
-											)}
-
-											<div className="min-w-0 flex-1">
-												<p className="truncate text-xs font-semibold text-slate-700">
-													{attachment.name}
-												</p>
-
-												<p className="text-[10px] text-slate-500">
-													{(attachment.size / 1024).toFixed(1)} KB
-												</p>
-											</div>
-
-											<button
-												type="button"
-												onClick={() => {
-													setPreviewFile(attachment);
-												}}
-												className="text-xs font-bold text-blue-700 hover:underline"
-											>
-												View
-											</button>
-
-											<button
-												type="button"
-												onClick={() => {
-													removeAttachment(attachment.id);
-												}}
-												className="text-xs font-bold text-red-700 hover:underline"
-											>
-												×
-											</button>
-										</div>
-									);
-								})}
-							</div>
-						</section>
-					)} */}
 				</div>
 			</div>
 
-			{/* {previewFile && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-					<div className="flex h-[95vh] w-full max-w-5xl flex-col bg-white shadow-2xl">
-						<div className="flex items-center justify-between border-b border-slate-300 px-3 py-2">
-							<div className="min-w-0">
-								<p className="truncate text-sm font-bold text-slate-800">
-									{previewFile.name}
-								</p>
-
-								<p className="text-xs text-slate-500">
-									{(previewFile.size / 1024).toFixed(1)} KB
-								</p>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<a
-									href={previewFile.previewUrl}
-									target="_blank"
-									rel="noreferrer"
-									className="text-sm font-semibold text-blue-700 hover:underline"
-								>
-									Open
-								</a>
-
-								<button
-									type="button"
-									onClick={() => {
-										setPreviewFile(null);
-									}}
-									className="rounded border border-slate-400 px-3 text-sm font-semibold hover:bg-slate-100"
-								>
-									Close
-								</button>
-							</div>
-						</div>
-
-						<div className="min-h-0 flex-1 bg-slate-100 p-2">
-							{previewFile.type.startsWith('image/') ? (
-								<img
-									src={previewFile.previewUrl}
-									alt={previewFile.name}
-									className="h-full w-full object-contain"
-								/>
-							) : previewFile.type === 'application/pdf' ? (
-								<iframe
-									title={previewFile.name}
-									src={previewFile.previewUrl}
-									className="h-full w-full border-0 bg-white"
-								/>
-							) : (
-								<div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-									<p className="text-sm font-semibold text-slate-700">
-										This file type cannot be previewed inside the application.
-									</p>
-
-									<a
-										href={previewFile.previewUrl}
-										target="_blank"
-										rel="noreferrer"
-										className="rounded bg-[#2167d5] px-4 py-2 text-sm font-bold text-white hover:bg-[#1553b5]"
-									>
-										Open File
-									</a>
-								</div>
-							)}
-						</div>
-					</div>
-				</div>
-			)} */}
+			{activePurchaseItem && (
+				<PurchaseOrderBatchSubform
+					item={activePurchaseItem}
+					product={selectedProduct}
+					batchItems={activePurchaseItem.batchItems || []}
+					onSave={handleBatchSave}
+					onChange={handleBatchChange}
+					onClose={closeBatchForm}
+				/>
+			)}
 
 			{customerInfo && (
 				<div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 px-4">

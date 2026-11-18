@@ -1,14 +1,14 @@
-import { useEffect, useMemo,  useState } from 'react';
-import { useAppStore } from '../../store/useAppStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAppStore } from '../../store/useAppStore.js';
 // import { getAllPurchase, getPurchases } from '../../api/purchaseApi';
 import { Link, useNavigate } from 'react-router-dom';
-import { formatGenericDate } from '../../utils/FormatGenericDate';
-
-import { currencyFormatter } from '../../utils/FormatNumber';
+import { formatGenericDate } from '../../utils/FormatGenericDate.js';
+import { ChevronDown, X } from 'lucide-react';
+import { currencyFormatter } from '../../utils/FormatNumber.js';
+import { getAllPurchaseOrders } from '../../API/purchaseOrderApi.js';
 // import { isAdminRole } from '../../utils/role';
 // import Can from '../../auth/permission/Can';
 // import { ROLES } from '../../auth/permission/permission';
-import { X } from 'lucide-react';
 
 const toISO = (d) =>
 	new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -47,7 +47,7 @@ function StatusBadge({ status }) {
 	);
 }
 
-const SaleOrderDashboard = () => {
+const PurchaseOrderDashboard = () => {
 	const navigate = useNavigate();
 
 	const today = new Date();
@@ -65,13 +65,12 @@ const SaleOrderDashboard = () => {
 	const currency = 'INR' //useAppStore((s) => s.currency);
 	const symbol = '$' //useAppStore((s) => s.currencySymbol);
 
-	
 
 	const purchases = useAppStore((state) => state.purchases);
 	const setPurchases = useAppStore((state) => state.setPurchases);
 	const setLoading = useAppStore((state) => state.setLoading);
 	const setError = useAppStore((state) => state.setError);
-	
+	const setLogout = useAppStore((state) => state.logout);
 
 	const supplier = useAppStore((state) => state.ledgerName);
 	// const role = useAppStore((state) => state.role);
@@ -95,54 +94,61 @@ const SaleOrderDashboard = () => {
 	// 	};
 	// }, []);
 
+	useEffect(()=>{
+		const fetchData = async () => {
+			const data = await getAllPurchaseOrders();
+			console.log(data);
+			if(data){
+				setPurchases(Array.isArray(data) ? data : []);
+			}
+		};
+		fetchData();
+	},[])
+
 	/*
 	 * Fetch purchases
 	 */
-	useEffect(() => {
-		if (!supplier) return;
+	// useEffect(() => {
+	// 	if (!supplier) return;
 
-		let ignore = false;
+	// 	let ignore = false;
 
-		setLoading(true);
-		setError(null);
+	// 	setLoading(true);
+	// 	setError(null);
 
-		const request = isAdmin
-			? getAllPurchase({
-					supplier: 'adminMode',
-					fromDate: from,
-					toDate: to,
-				})
-			: getPurchases({
-					supplier,
-					fromDate: from,
-					toDate: to,
-				});
+	// 	const request = isAdmin
+	// 		? getAllPurchase({
+	// 				supplier: 'adminMode',
+	// 				fromDate: from,
+	// 				toDate: to,
+	// 			})
+	// 		: 
 
-		request
-			.then((data) => {
-				if (!ignore) {
-					setPurchases(Array.isArray(data) ? data : []);
-				}
-			})
-			.catch((err) => {
-				if (!ignore) {
-					setError(
-						err.response?.data?.message ||
-							err.message ||
-							'Failed to fetch purchases',
-					);
-				}
-			})
-			.finally(() => {
-				if (!ignore) {
-					setLoading(false);
-				}
-			});
+	// 	request
+	// 		.then((data) => {
+	// 			if (!ignore) {
+	// 				setPurchases(Array.isArray(data) ? data : []);
+	// 			}
+	// 		})
+	// 		.catch((err) => {
+	// 			if (!ignore) {
+	// 				setError(
+	// 					err.response?.data?.message ||
+	// 						err.message ||
+	// 						'Failed to fetch purchases',
+	// 				);
+	// 			}
+	// 		})
+	// 		.finally(() => {
+	// 			if (!ignore) {
+	// 				setLoading(false);
+	// 			}
+	// 		});
 
-		return () => {
-			ignore = true;
-		};
-	}, [supplier, from, to, isAdmin, setPurchases, setLoading, setError]);
+	// 	return () => {
+	// 		ignore = true;
+	// 	};
+	// }, [supplier, from, to, isAdmin, setPurchases, setLoading, setError]);
 
 	/*
 	 * Filter by date + search
@@ -243,7 +249,7 @@ const SaleOrderDashboard = () => {
 				{/* Top title + profile */}
 				<div className="mb-1 flex items-center justify-between ">
 					<div>
-						<h1 className="text-lg font-semibold tracking-tight">Sale Orders</h1>
+						<h1 className="text-lg font-semibold tracking-tight">Purchase Orders</h1>
 					</div>
 
 					{/* <div>Crown Pack</div> */}
@@ -373,10 +379,10 @@ const SaleOrderDashboard = () => {
 					{/* Create Purchase */}
 					
 						<Link
-							to="/so"
+							to="/po"
 							className="flex h-6 items-center justify-center rounded-md bg-emerald-500 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 lg:ml-auto"
 						>
-							+ Create Sale Order
+							+ Create Purchase Orders
 						</Link>
 					
 
@@ -458,7 +464,7 @@ const SaleOrderDashboard = () => {
 									<th className="border-x border-red-200 w-32 text-center py-1">
 										Voucher Status
 									</th>
-									{/* {isAdmin && (
+									{isAdmin && (
 										<>
 											<th className="border-x border-red-200 w-32 text-center py-1">
 												Tally Sync
@@ -467,7 +473,7 @@ const SaleOrderDashboard = () => {
 												Payment Status
 											</th>
 										</>
-									)} */}
+									)}
 
 									<th className="last:border-r-0 border-x border-red-200 w-32 pr-2 py-1 text-right">
 										Amount
@@ -497,7 +503,7 @@ const SaleOrderDashboard = () => {
 										</td>
 
 										<td className="border border-red-200 px-2 py-0 font-medium text-neutral-900">
-											{v.supplier}
+											{v.supplierName}
 										</td>
 
 										<td className="border border-red-200 px-2 py-0 font-medium text-neutral-900">
@@ -521,7 +527,7 @@ const SaleOrderDashboard = () => {
 										<td className="border align-middle border-red-200 text-center leading-none">
 											<StatusBadge status={v.voucherStatus || 'unknown'} />
 										</td>
-										{/* {isAdmin && (
+										{isAdmin && (
 											<>
 												<td className="border align-middle border-red-200 text-center py-0 leading-none">
 													<StatusBadge status={v.tallyStatus || 'unknown'} />
@@ -530,7 +536,7 @@ const SaleOrderDashboard = () => {
 													<StatusBadge status={v.paymentStatus || 'unknown'} />
 												</td>
 											</>
-										)} */}
+										)}
 
 										<td className="last:border-r-0 border border-red-200 pr-2 text-right font-medium tabular-nums text-neutral-900">
 											{currencyFormatter(
@@ -573,4 +579,4 @@ const SaleOrderDashboard = () => {
 	);
 };
 
-export default SaleOrderDashboard;
+export default PurchaseOrderDashboard;

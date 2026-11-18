@@ -12,9 +12,9 @@ import {
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
-import { useAppStore } from '../store/useAppStore.js';
+import { useAppStore } from '../../store/useAppStore.js';
 import { toast } from 'sonner';
-import { loginWithPassword, verifyOtp } from '../API/authApi';
+import { loginWithPassword, verifyOtp } from '../../API/authApi.js';
 
 const LoginPage = () => {
 	const login = useAppStore((state) => state.login);
