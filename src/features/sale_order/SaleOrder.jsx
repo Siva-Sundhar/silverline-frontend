@@ -29,7 +29,7 @@ import {
 	formatNumber,
 	formatPercent,
 	unformatNumber,
-} from '../../utils/FormatNumber.js';
+} from '../../utils/convertCurrencyAndNumber.js';
 import customers from '../../utils/test_master/customers.js';
 import { createSaleOrder } from '../../API/saleOrderApi.js';
 

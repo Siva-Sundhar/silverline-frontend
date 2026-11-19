@@ -17,6 +17,9 @@ const PurchaseOrderHeader = ({
 	commitDateChange,
 	focusFirstGridCell
 }) => {
+
+	
+	
 	const [dateInputText, setDateInputText] = useState(
 		formatGenericDate(formData.voucherDate || new Date(), 'DD-MMM-YY'),
 	);
@@ -394,7 +397,7 @@ const PurchaseOrderHeader = ({
 							</h1>
 						</div>
 
-						<form>
+						
 							{/* Supplier Details */}
 							<div className="space-y-0.5">
 								{/* Supplier */}
@@ -502,7 +505,7 @@ const PurchaseOrderHeader = ({
 									</button>
 								</div>
 							</div>
-						</form>
+						
 					</div>
 				</div>
 			)}
@@ -516,7 +519,7 @@ const PurchaseOrderHeader = ({
 							</h1>
 						</div>
 
-						<form>
+						
 							{/* Supplier Details */}
 							<div className="space-y-0.5">
 								{/* Supplier */}
@@ -629,7 +632,7 @@ const PurchaseOrderHeader = ({
 									</button>
 								</div>
 							</div>
-						</form>
+						
 					</div>
 				</div>
 			)}

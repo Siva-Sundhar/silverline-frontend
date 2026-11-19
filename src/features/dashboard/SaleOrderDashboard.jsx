@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/useAppStore.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatGenericDate } from '../../utils/FormatGenericDate.js';
 
-import { currencyFormatter } from '../../utils/FormatNumber.js';
+import { currencyFormatter } from '../../utils/convertCurrencyAndNumber.js';
 // import { isAdminRole } from '../../utils/role';
 // import Can from '../../auth/permission/Can';
 // import { ROLES } from '../../auth/permission/permission';

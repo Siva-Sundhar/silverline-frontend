@@ -1,11 +1,17 @@
-export const currencyFormatter = (value, locale, currencyCode, symbol) => {
+// import { useStore } from "zustand";
+
+	const localeISO = 'en-US'; //useAppStore((s) => s.locale);
+	const currencyCode = 'USD'; //useAppStore((s) => s.currency);
+	const symbol = '$'; //useAppStore((s) => s.currencySymbol);
+
+export const currencyFormatter = (value) => {
 	const numberValue = typeof value === 'string' ? Number(value) : value;
 
 	if (!Number.isFinite(numberValue)) {
 		return '0';
 	}
 
-	const formatted = new Intl.NumberFormat(locale || undefined, {
+	const formatted = new Intl.NumberFormat(localeISO || undefined, {
 		style: 'currency',
 		currency: currencyCode,
 		minimumFractionDigits: 2,
@@ -17,7 +23,7 @@ export const currencyFormatter = (value, locale, currencyCode, symbol) => {
 		: `${symbol} ${formatted}`;
 };
 
-export const formatNumber = (value, locale) => {
+export const formatNumber = (value) => {
 	const numberValue =
 		value === null || value === undefined || value === '' ? 0 : Number(value);
 
@@ -25,7 +31,7 @@ export const formatNumber = (value, locale) => {
 		return '0.00';
 	}
 
-	return numberValue.toLocaleString(locale || undefined, {
+	return numberValue.toLocaleString(localeISO || undefined, {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2,
 	});

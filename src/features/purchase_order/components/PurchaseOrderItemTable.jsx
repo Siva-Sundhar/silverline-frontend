@@ -1,19 +1,25 @@
+
+import { currencyFormatter } from '../../../utils/convertCurrencyAndNumber.js';
+import { createEmptyPurchaseRow } from '../utils/purchaseOrderHelpers.js';
 import PurchaseOrderItemRow from './PurchaseOrderItemRow.jsx';
 
 const PurchaseOrderItemTable = ({
-	purchaseItems,
-	taxMode,
+	items,
 	focusedCell,
+	setFocusedCell,
+	productOptions,
 	rowProductOptions,
 	registerGridRef,
-	focusAndSelectGridCell,
 	handleGridKeyDown,
 	updateRow,
-	handleEndOfList,
 	setActiveBatchRow,
-	renderProductOption,
 	totals,
-}) => {
+	open,
+	setOpen,
+	handleEndOfList,
+	
+}) => {	
+	
 	return (
 		<table className="w-full min-w-225 border-collapse text-[12px] border-t border-slate-400">
 			<thead className="sticky top-0 z-10 border-t ">
@@ -56,8 +62,23 @@ const PurchaseOrderItemTable = ({
 			</thead>
 
 			<tbody onFocus={() => open && setOpen(false)}>
-				
-				<PurchaseOrderItemRow />
+				{items.map((item, rowIndex) => (
+					<PurchaseOrderItemRow 
+						key={item.id}
+						currentItem={item}
+						rowIndex={rowIndex}
+						productOptions={productOptions}
+						rowProductOptions={rowProductOptions}
+						handleGridKeyDown={handleGridKeyDown}
+						handleEndOfList={handleEndOfList}
+						setActiveBatchRow={setActiveBatchRow}
+						focusedCell={focusedCell}
+						setFocusedCell={setFocusedCell}
+						registerGridRef={registerGridRef}
+						updateRow={updateRow}
+
+					/>
+				))}
 			</tbody>
 
 			<tfoot>
@@ -68,7 +89,7 @@ const PurchaseOrderItemTable = ({
 					<td colSpan={6}></td>
 
 					<td className="text-right pr-1.5 border-y border-slate-300 font-semibold">
-						{'money(totals.itemTaxable)'}
+						{currencyFormatter(totals.itemTaxable)}
 					</td>
 				</tr>
 			</tfoot>

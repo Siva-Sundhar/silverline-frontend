@@ -10,6 +10,7 @@ import { Dashboard } from './features/dashboard/Dashboard';
 import AsideView from './features/dashboard/AsideView';
 
 import PurchasePrint from './components/print/PurchasePrint';
+// import PurchaseOrder from './components/purchase_order/PurchaseOrder';
 import PurchaseOrder from './features/purchase_order/page/PurchaseOrder';
 
 const App = () => {

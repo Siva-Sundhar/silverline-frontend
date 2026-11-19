@@ -1,4 +1,7 @@
-const PurchaseBottomSection = ({
+import PurchaseOrderExpenseTable from "./PurchaseOrderExpenseTable";
+import PurchaseSummary from "./PurchaseOrderSummary";
+
+const PurchaseOrderBottomSection = ({
     openView,
     setOpenView,
     expenses,
@@ -47,7 +50,7 @@ const PurchaseBottomSection = ({
                 )}
 
                 {openView === 'expenses' && (
-                    <PurchaseExpenseTable
+                    <PurchaseOrderExpenseTable
                         expenses={expenses}
                         expenseTotals={expenseTotals}
                         renderExpenseRow={renderExpenseRow}
@@ -77,4 +80,4 @@ const PurchaseBottomSection = ({
     );
 };
 
-export default PurchaseBottomSection;
+export default PurchaseOrderBottomSection;

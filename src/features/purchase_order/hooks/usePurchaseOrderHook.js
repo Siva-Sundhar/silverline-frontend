@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -6,10 +6,6 @@ import {
 	toISODate,
 	formatGenericDate,
 } from '../../../utils/FormatGenericDate.js';
-import {
-	currencyFormatter,
-	unformatNumber,
-} from '../../../utils/FormatNumber.js';
 
 import { calculateVoucherTotals } from '../../../utils/calculations/voucher/voucherTotals.js';
 import { calculateExpenses } from '../../../utils/calculations/index.js';
@@ -18,6 +14,7 @@ import {
 	createEmptyExpenseRow,
 	createEmptyPurchaseRow,
 } from '../utils/purchaseOrderHelpers.js';
+import useProducts from '../../../hooks/useProducts.js';
 
 const FORMATTED_COLS = {
 	1: 'qty',
@@ -29,7 +26,8 @@ const EDITABLE_COLS = [0, 1, 2];
 const EXPENSE_FIELDS = ['particular', 'amount', 'tax'];
 const FORMATTED_EXPENSE_FIELDS = new Set(['amount', 'tax']);
 const MAX_EXP_ROWS = 5;
-const usePurchaseOrderForm = (orderId) => {
+
+const usePurchaseOrderHook = (orderId) => {
 	const { id: routeId } = useParams();
 	const navigate = useNavigate();
 
@@ -40,11 +38,10 @@ const usePurchaseOrderForm = (orderId) => {
 	const [saving, setSaving] = useState(false);
 
 	const [formData, setFormData] = useState({
-		voucherNo: '',
-		voucherType: 'Purchase Order',
-		suplierName: '',
-		distributorName: '',
-		voucherDate: toISODate(new Date()),
+		voucherNo: '1001',
+		suplierName: 'Siva',
+		distributorName: 'Silver',
+		voucherDate: '',
 		orderNo: '',
 		referenceDate: '',
 		narration: '',
@@ -55,26 +52,70 @@ const usePurchaseOrderForm = (orderId) => {
 		taxMode: 'vat',
 		taxType: 'intra',
 		autoRound: true,
+		teleport: false,
 	});
 
+	const { items = [] } = useProducts();
+
+	// ? /----------- States Initialization -----------/ ? //
 	const [purchaseItems, setPurchaseItems] = useState([
 		createEmptyPurchaseRow(),
 	]);
-
 	const [expenses, setExpenses] = useState([createEmptyExpenseRow()]);
-
 	const [focusedCell, setFocusedCell] = useState(null);
 	const [focusedExpenseCell, setFocusedExpenseCell] = useState(null);
 	const [open, setOpen] = useState(false);
 	const [openView, setOpenView] = useState('expenses');
 	const [activeBatchRow, setActiveBatchRow] = useState(null);
 
+	// ? /========= Ref Initialiations ==========/ ? //
 	const headerRefs = useRef([]);
 	const gridRefs = useRef({});
 	const expenseRefs = useRef({});
 	const remarksRef = useRef(null);
 
-	/* ---------------- Ref registration ---------------- */
+	// ? /================== Product Option ==================/ ? //
+	const productOptions = useMemo(() => {
+		return items.map((product) => ({
+			label: product.itemCode,
+			value: product.itemCode,
+			product,
+		}));
+	}, [items]);
+
+	const productOptionsWithEnd = useMemo(
+		() => [
+			{
+				label: '♦ End of List',
+				value: '__END_OF_LIST__',
+				isEndOfList: true,
+			},
+			...productOptions,
+		],
+		[productOptions],
+	);
+
+	const rowProductOptions = useMemo(() => {
+		return purchaseItems.length > 1 ? productOptionsWithEnd : productOptions;
+	}, [purchaseItems.length, productOptionsWithEnd, productOptions]);
+
+	// ? /================== Expense Option ==================/ ? //
+	// const ledgerOptions = useMemo(() => {
+	// 	return ledgers.map((ledger) => ({
+	// 		label: ledger.ledgerName,
+	// 		value: ledger.ledgerName,
+	// 	}));
+	// }, []);
+
+	// ? /================== Customer Option ==================/ ? //
+	// const customerOptions = useMemo(() => {
+	// 	return customers.map((ledger) => ({
+	// 		label: ledger.customerName,
+	// 		value: ledger.customerName,
+	// 	}));
+	// }, []);
+
+	// ? /=========== Ref registration ==========/ ? //
 
 	const registerHeaderRef = useCallback(
 		(index) => (element) => {
@@ -164,7 +205,7 @@ const usePurchaseOrderForm = (orderId) => {
 		[focusExpenseRef],
 	);
 
-	/* ---------------- Form handlers ---------------- */
+	// ? /=========== Form handlers ===========/ ? //
 
 	const setField = useCallback(
 		(name) => (event) => {
@@ -217,7 +258,7 @@ const usePurchaseOrderForm = (orderId) => {
 		);
 	}, []);
 
-	// ---------------- Keyboard navigation ---------------- !*/
+	// ? /=========== Keyboard navigation ===========/ //
 
 	const handleHeaderKeyDown = useCallback(
 		(event, nextIndex) => {
@@ -227,6 +268,38 @@ const usePurchaseOrderForm = (orderId) => {
 			focusHeaderRef(nextIndex);
 		},
 		[focusHeaderRef],
+	);
+
+	const handleEndOfList = useCallback(
+		(rowIndex) => {
+			setPurchaseItems((rows) => {
+				if (rows.length === 1) {
+					return [createEmptyPurchaseRow()];
+				}
+
+				return rows.filter((_, index) => index !== rowIndex);
+			});
+
+			setTimeout(() => {
+				if (rowIndex < purchaseItems.length - 1) {
+					focusAndSelectGridCell(rowIndex, 0);
+					return;
+				}
+
+				if (rowIndex > 0) {
+					setOpen(true);
+
+					setTimeout(() => {
+						focusExpenseRef(0, 'particular');
+					}, 0);
+
+					return;
+				}
+
+				remarksRef.current?.focus();
+			}, 0);
+		},
+		[purchaseItems.length, focusAndSelectGridCell, focusExpenseRef, setOpen],
 	);
 
 	const handleGridKeyDown = useCallback(
@@ -396,7 +469,11 @@ const usePurchaseOrderForm = (orderId) => {
 
 		// table state
 		purchaseItems,
+		setPurchaseItems,
 		updateRow,
+		productOptions,
+		rowProductOptions,
+		handleEndOfList,
 
 		// expenses state
 		expenses,
@@ -427,6 +504,7 @@ const usePurchaseOrderForm = (orderId) => {
 		openView,
 		setOpenView,
 		focusedCell,
+		setFocusedCell,
 		focusedExpenseCell,
 		activeBatchRow,
 		setActiveBatchRow,
@@ -437,4 +515,4 @@ const usePurchaseOrderForm = (orderId) => {
 	};
 };
 
-export default usePurchaseOrderForm;
+export default usePurchaseOrderHook;
